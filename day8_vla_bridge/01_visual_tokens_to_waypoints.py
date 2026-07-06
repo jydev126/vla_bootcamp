@@ -55,7 +55,7 @@ class VisualWaypointVLA(nn.Module):
         self.head = nn.Sequential(nn.LayerNorm(96), nn.Linear(96, 128), nn.GELU(), nn.Linear(128, 12))
 
     def forward(self, image, ids, mask, trace=False):
-        vf, patches = self.vision_encoder(image)
+        vf, _patch_tokens, patches = self.vision_encoder(image)
         visual = self.projector(vf)
         text = self.text_embedding(ids)
         lat = self.latents.expand(image.shape[0], -1, -1)

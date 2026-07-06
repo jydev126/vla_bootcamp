@@ -1,0 +1,11 @@
+# Core runtime for the VLA bootcamp examples.
+#
+# This intentionally avoids freezing platform-specific CUDA packages from a
+# Linux .venv. Installing torch from PyPI resolves to:
+# - Linux x86_64/NVIDIA: CUDA-enabled PyTorch wheels and nvidia-* runtime deps.
+# - macOS arm64/M-series: Apple Silicon wheels with MPS support.
+
+torch>=2.4,<3
+transformers>=4.44,<5
+pillow>=10,<12
+matplotlib>=3.8,<4

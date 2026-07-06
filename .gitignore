@@ -1,3 +1,59 @@
-**/__pycache__/**
-temp/
+# Python cache / tooling
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+.coverage
+htmlcov/
 
+# Python packaging
+build/
+dist/
+*.egg-info/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Local config and secrets
+.env
+.env.*
+!.env.example
+
+# Editor / OS files
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs and temporary files
+temp/
+tmp/
+*.log
+
+# ML experiment outputs and large artifacts
+**/outputs/
+**/checkpoints/
+**/runs/
+**/wandb/
+**/mlruns/
+**/lightning_logs/
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.onnx
+*.bin
+
+# Local data/model caches
+data/
+datasets/
+models/
+.cache/
+hf_cache/

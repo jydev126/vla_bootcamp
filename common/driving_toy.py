@@ -13,11 +13,17 @@ from PIL import Image, ImageDraw
 COMMANDS = ["keep", "brake", "left", "right"]
 REASONS = ["keep", "brake_due_to_close_lead", "lane_change_left", "lane_change_right"]
 DATA_PATH = Path("common/outputs/toy_driving.jsonl")
+DATA_VERSION = 2
 IMAGE_SIZE = 64
+HISTORY_TIMES = [-1.5, -1.0, -0.5]
+FUTURE_DT = 0.5
+NUM_FUTURE_STEPS = 6
+CLOSE_LEAD_DISTANCE = 14.0
+CLOSING_REL_SPEED = -1.0
 
 
 def reason_from_sample(sample: dict) -> str:
-    if sample["command"] == "brake" or (sample["lead_distance"] < 14.0 and sample["rel_speed"] < -1.0):
+    if sample["lead_distance"] < CLOSE_LEAD_DISTANCE and sample["rel_speed"] < CLOSING_REL_SPEED:
         return "brake_due_to_close_lead"
     if sample["command"] == "left":
         return "lane_change_left"
@@ -26,38 +32,67 @@ def reason_from_sample(sample: dict) -> str:
     return "keep"
 
 
-def generate_sample(rng: random.Random) -> dict:
-    command = rng.choice(COMMANDS)
-    ego_speed = rng.uniform(3.0, 14.0)
-    lead_distance = rng.uniform(6.0, 40.0)
-    rel_speed = rng.uniform(-5.0, 3.0)
-    history = []
-    for t in [-1.5, -1.0, -0.5]:
-        history.append([round(ego_speed * t + rng.gauss(0.0, 0.08), 3), round(rng.gauss(0.0, 0.04), 3)])
+def _sample_lead_state(rng: random.Random, reason: str) -> tuple[float, float]:
+    if reason == "brake_due_to_close_lead":
+        return rng.uniform(6.0, 13.5), rng.uniform(-5.0, -1.3)
+    return rng.uniform(16.0, 40.0), rng.uniform(-0.8, 3.0)
 
-    speed_scale = ego_speed / 10.0
-    close_factor = 1.0
-    if lead_distance < 16.0 and rel_speed < 0.0:
-        close_factor = max(0.35, lead_distance / 16.0 + rel_speed / 12.0)
 
+def _future_waypoints(rng: random.Random, ego_speed: float, command: str) -> list[list[float]]:
     future = []
-    for step in range(1, 7):
+    lane_width = 3.5
+    horizon = FUTURE_DT * NUM_FUTURE_STEPS
+
+    for step in range(1, NUM_FUTURE_STEPS + 1):
+        t = FUTURE_DT * step
         if command == "brake":
-            dx = speed_scale * sum(max(0.25, 1.0 - 0.12 * k) for k in range(1, step + 1))
-            dx *= min(close_factor, 0.75)
+            decel = ego_speed / horizon * 0.85
+            dx = max(0.0, ego_speed * t - 0.5 * decel * t * t)
             y = 0.0
-        elif command == "left":
-            dx = speed_scale * step * close_factor
-            y = 0.18 * step + 0.035 * step * step
-        elif command == "right":
-            dx = speed_scale * step * close_factor
-            y = -0.18 * step - 0.035 * step * step
         else:
-            dx = speed_scale * step * close_factor
-            y = 0.0
+            dx = ego_speed * t
+            progress = t / horizon
+            smooth = progress * progress * (3.0 - 2.0 * progress)
+            if command == "left":
+                y = lane_width * smooth
+            elif command == "right":
+                y = -lane_width * smooth
+            else:
+                y = 0.0
+
         future.append([round(dx + rng.gauss(0.0, 0.04), 3), round(y + rng.gauss(0.0, 0.025), 3)])
 
+    return future
+
+
+def generate_sample(rng: random.Random) -> dict:
+    reason = rng.choice(REASONS)
+    if reason == "brake_due_to_close_lead":
+        command = rng.choice(COMMANDS)
+    else:
+        command = {
+            "keep": "keep",
+            "lane_change_left": "left",
+            "lane_change_right": "right",
+        }[reason]
+    action = {
+        "keep": "keep",
+        "brake_due_to_close_lead": "brake",
+        "lane_change_left": "left",
+        "lane_change_right": "right",
+    }[reason]
+
+    ego_speed = rng.uniform(3.0, 12.0 if action == "brake" else 14.0)
+    lead_distance, rel_speed = _sample_lead_state(rng, reason)
+
+    history = []
+    for t in HISTORY_TIMES:
+        history.append([round(ego_speed * t + rng.gauss(0.0, 0.08), 3), round(rng.gauss(0.0, 0.04), 3)])
+
+    future = _future_waypoints(rng, ego_speed, action)
+
     sample = {
+        "data_version": DATA_VERSION,
         "ego_speed": round(ego_speed, 3),
         "lead_distance": round(lead_distance, 3),
         "rel_speed": round(rel_speed, 3),
@@ -67,6 +102,17 @@ def generate_sample(rng: random.Random) -> dict:
     }
     sample["reason"] = reason_from_sample(sample)
     return sample
+
+
+def _is_current_data(samples: list[dict], num_samples: int) -> bool:
+    if len(samples) < num_samples:
+        return False
+    for sample in samples[:num_samples]:
+        if sample.get("data_version") != DATA_VERSION:
+            return False
+        if sample.get("reason") != reason_from_sample(sample):
+            return False
+    return True
 
 
 def write_jsonl(samples: Iterable[dict], path: Path = DATA_PATH) -> None:
@@ -84,7 +130,7 @@ def load_jsonl(path: Path = DATA_PATH) -> list[dict]:
 def ensure_data(path: Path = DATA_PATH, num_samples: int = 10000, seed: int = 42) -> list[dict]:
     if path.exists():
         samples = load_jsonl(path)
-        if len(samples) >= num_samples:
+        if _is_current_data(samples, num_samples):
             return samples[:num_samples]
     rng = random.Random(seed)
     samples = [generate_sample(rng) for _ in range(num_samples)]
@@ -100,7 +146,7 @@ def split_samples(samples: list[dict], val_ratio: float = 0.15) -> tuple[list[di
 def future_to_tensor(sample: dict) -> torch.Tensor:
     flat = []
     for x, y in sample["future"]:
-        flat.extend([x / 10.0, y / 4.0])
+        flat.extend([x / 45.0, y / 4.0])
     return torch.tensor(flat, dtype=torch.float32)
 
 
@@ -156,10 +202,19 @@ def render_bev(sample: dict, image_size: int = IMAGE_SIZE) -> Image.Image:
     draw = ImageDraw.Draw(image)
     draw.rectangle((12, 0, 52, image_size), fill=(76, 78, 80))
     draw.line((32, 0, 32, image_size), fill=(232, 218, 80), width=2)
+    meters_to_px = 44.0 / 45.0
+    lateral_to_px = 10.0 / 3.5
+    ego_x = 32
+    ego_y = 55
+    for hist_x, hist_y in sample.get("history", []):
+        px = int(round(ego_x + hist_y * lateral_to_px))
+        py = int(round(ego_y - hist_x * meters_to_px))
+        if 0 <= px < image_size and 0 <= py < image_size:
+            draw.ellipse((px - 1, py - 1, px + 1, py + 1), fill=(190, 205, 215))
     draw.rectangle((27, 50, 37, 60), fill=(245, 245, 245))
     lead_y = int(50 - sample["lead_distance"] / 45.0 * 44.0)
     lead_y = max(4, min(46, lead_y))
-    color = (210, 54, 48) if sample["rel_speed"] < -1.0 else (55, 100, 210)
+    color = (210, 54, 48) if sample["rel_speed"] < CLOSING_REL_SPEED else (55, 100, 210)
     draw.rectangle((27, lead_y, 37, lead_y + 8), fill=color)
     if sample["command"] == "left":
         draw.polygon([(18, 14), (10, 20), (18, 26)], fill=(90, 220, 130))
