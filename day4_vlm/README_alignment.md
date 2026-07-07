@@ -1,4 +1,4 @@
-# Day 5: VLM projector alignment 与 instruction tuning
+# Day 4 continuation: VLM projector alignment 与 instruction tuning
 
 Day4 解决结构问题:
 
@@ -8,7 +8,7 @@ text -> text tokens
 visual tokens + text tokens -> hidden
 ```
 
-Day5 解决训练问题:
+Day4 后半段解决训练问题:
 
 ```text
 projector 怎么对齐?
@@ -19,19 +19,19 @@ instruction tuning 和普通分类有什么区别?
 ## 运行顺序
 
 ```bash
-.venv/bin/python day5_vlm_alignment/01_projector_alignment.py
-.venv/bin/python day5_vlm_alignment/02_instruction_tuning.py
+.venv/bin/python day4_vlm/05_projector_alignment.py
+.venv/bin/python day4_vlm/06_instruction_tuning.py
 ```
 
 ## 两个脚本分别掌握什么
 
 ```text
-01_projector_alignment.py
+05_projector_alignment.py
 冻结 TinyViTEncoder。
 训练 projector + token_pooler + label_anchors。
 目标: 让图像 embedding 靠近正确 reason anchor。
 
-02_instruction_tuning.py
+06_instruction_tuning.py
 冻结 TinyViTEncoder。
 训练 projector + tiny_llm + answer_head。
 目标: 让模型在不同 prompt 下都能在 ANSWER 位置形成正确 hidden state。

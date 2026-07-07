@@ -5,7 +5,7 @@
 | Day | 目录 | 核心问题 | 主要出处 |
 | --- | --- | --- | --- |
 | 4 | `day4_vlm` | LLM 如何接收 image token | MiniGPT-4 |
-| 5 | `day5_vlm_alignment` | projector alignment / instruction tuning 训练什么 | MiniGPT-4 |
+| 4 | `day4_vlm` | projector alignment / instruction tuning 训练什么 | MiniGPT-4 |
 | 6 | `day6_act` | action 是什么，为什么要 action chunk | ACT / ALOHA |
 | 7 | `day7_openvla_action` | 连续 action 如何变成 token | OpenVLA |
 | 8 | `day8_vla_bridge` | VLM hidden state 如何接 action head | MiniGPT-4 + ACT |

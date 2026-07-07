@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 """
-Day 5 / 02
+Day 4 / 06
 
 Instruction tuning: 用不同问法训练同一个 tiny VLM。
 
@@ -74,6 +74,36 @@ def show_prompt_predictions(model: day4.TinyVLM, sample: dict, device: str) -> N
     model.train()
 
 
+@torch.no_grad()
+def evaluate_prompt_templates(model: day4.TinyVLM, samples: list[dict], device: str) -> list[tuple[str, float, int, int]]:
+    was_training = model.training
+    model.eval()
+    reason_to_id = {name: i for i, name in enumerate(REASONS)}
+    results = []
+
+    for prompt in day4.QUESTION_TEMPLATES:
+        correct = 0
+        total = 0
+        ids = day4.encode_prompt(prompt).unsqueeze(0).to(device)
+        for sample in samples:
+            image = day4.image_to_tensor(day4.render_bev(sample)).unsqueeze(0).to(device)
+            label = reason_to_id[day4.reason_from_sample(sample)]
+            pred = model(image, ids).argmax(dim=-1).item()
+            correct += int(pred == label)
+            total += 1
+        results.append((" ".join(prompt), correct / max(total, 1), correct, total))
+
+    if was_training:
+        model.train()
+    return results
+
+
+def print_prompt_eval(title: str, results: list[tuple[str, float, int, int]]) -> None:
+    print(title)
+    for prompt, acc, correct, total in results:
+        print(f"  {prompt:42s} acc={acc:.3f} ({correct}/{total})")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--num-samples", type=int, default=1000)
@@ -95,7 +125,7 @@ def main() -> None:
         shuffle=True,
     )
     val_loader = DataLoader(
-        day4.TinyVLMDataset(val_samples, prompt_mode="random"),
+        day4.TinyVLMDataset(val_samples, prompt_mode="fixed"),
         batch_size=args.batch_size,
     )
 
@@ -122,6 +152,10 @@ def main() -> None:
 
     show_prompt_predictions(model, val_samples[0], device)
     print()
+    day4.print_eval_report("训练前 fixed-prompt eval:", day4.evaluate_detailed(model, val_loader, device))
+    print()
+    print_prompt_eval("训练前 prompt-template eval:", evaluate_prompt_templates(model, val_samples, device))
+    print()
 
     for epoch in range(1, args.epochs + 1):
         train_loss = day4.train_one_epoch(model, train_loader, optimizer, device)
@@ -130,6 +164,10 @@ def main() -> None:
 
     print()
     show_prompt_predictions(model, val_samples[0], device)
+    print()
+    day4.print_eval_report("训练后 fixed-prompt eval:", day4.evaluate_detailed(model, val_loader, device))
+    print()
+    print_prompt_eval("训练后 prompt-template eval:", evaluate_prompt_templates(model, val_samples, device))
 
 
 if __name__ == "__main__":

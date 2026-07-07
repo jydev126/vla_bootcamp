@@ -36,8 +36,8 @@ requires_grad_(False)
 今天我们用两个 toy 脚本把它们讲清楚:
 
 ```bash
-.venv/bin/python day5_vlm_alignment/01_projector_alignment.py
-.venv/bin/python day5_vlm_alignment/02_instruction_tuning.py
+.venv/bin/python day4_vlm/05_projector_alignment.py
+.venv/bin/python day4_vlm/06_instruction_tuning.py
 ```
 
 今天你要掌握三件事。
@@ -103,7 +103,7 @@ projector 真正要学的是:
 第一个脚本是:
 
 ```text
-day5_vlm_alignment/01_projector_alignment.py
+day4_vlm/05_projector_alignment.py
 ```
 
 它模拟 MiniGPT-4 风格的 Stage 1。
@@ -371,7 +371,7 @@ loss 表面上可能是分类、重建、预测 token。
 第二个脚本是:
 
 ```text
-day5_vlm_alignment/02_instruction_tuning.py
+day4_vlm/06_instruction_tuning.py
 ```
 
 它模拟 Stage 2: instruction tuning。

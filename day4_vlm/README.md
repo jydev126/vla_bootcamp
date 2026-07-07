@@ -17,9 +17,11 @@
 .venv/bin/python day4_vlm/02_tiny_vit_encoder.py --batch-size 2
 .venv/bin/python day4_vlm/03_minigpt4_bridge.py --batch-size 2
 .venv/bin/python day4_vlm/04_train_tiny_vlm.py
+.venv/bin/python day4_vlm/05_projector_alignment.py
+.venv/bin/python day4_vlm/06_instruction_tuning.py
 ```
 
-## 四个脚本分别掌握什么
+## 六个脚本分别掌握什么
 
 ```text
 01_patchify_image.py
@@ -39,6 +41,16 @@ concat([visual_tokens, text_tokens]) -> tiny LLM hidden
 04_train_tiny_vlm.py
 image + prompt -> ANSWER hidden -> reason logits
 重点: 真正训练 tiny VLM, 看训练前/训练后预测变化。
+
+05_projector_alignment.py
+冻结 TinyViTEncoder。
+训练 projector + token_pooler + label_anchors。
+重点: projector 不只是改 shape, 还要做视觉-语义对齐。
+
+06_instruction_tuning.py
+冻结 TinyViTEncoder。
+训练 projector + tiny_llm + answer_head。
+重点: 用不同 prompt 训练同一个 tiny VLM。
 ```
 
 ## 重点理解: Linear + position 为什么是加法

@@ -150,21 +150,72 @@ def count_parameters(model: nn.Module) -> tuple[int, int]:
 
 @torch.no_grad()
 def evaluate(model: nn.Module, loader: DataLoader, device: str) -> float:
+    stats = evaluate_detailed(model, loader, device)
+    return stats["accuracy"]
+
+
+@torch.no_grad()
+def evaluate_detailed(model: nn.Module, loader: DataLoader, device: str) -> dict:
+    was_training = model.training
     model.eval()
-    correct = 0
-    total = 0
+    confusion = torch.zeros(len(REASONS), len(REASONS), dtype=torch.long)
+    examples = []
 
     for image, ids, label in loader:
         image = image.to(device)
         ids = ids.to(device)
         label = label.to(device)
 
-        pred = model(image, ids).argmax(dim=-1)
-        correct += (pred == label).sum().item()
-        total += label.numel()
+        logits = model(image, ids)
+        pred = logits.argmax(dim=-1)
+        probs = logits.softmax(dim=-1)
 
-    model.train()
-    return correct / max(total, 1)
+        for target_id, pred_id in zip(label.cpu(), pred.cpu()):
+            confusion[target_id, pred_id] += 1
+
+        if len(examples) < 5:
+            batch_examples = min(image.shape[0], 5 - len(examples))
+            for i in range(batch_examples):
+                pred_id = pred[i].item()
+                examples.append(
+                    {
+                        "target": REASONS[label[i].item()],
+                        "pred": REASONS[pred_id],
+                        "conf": probs[i, pred_id].item(),
+                    }
+                )
+
+    total = confusion.sum().item()
+    correct = confusion.diag().sum().item()
+    if was_training:
+        model.train()
+    return {
+        "accuracy": correct / max(total, 1),
+        "correct": correct,
+        "total": total,
+        "confusion": confusion,
+        "examples": examples,
+    }
+
+
+def print_eval_report(title: str, stats: dict) -> None:
+    confusion = stats["confusion"]
+    print(title)
+    print(f"  accuracy={stats['accuracy']:.3f} ({stats['correct']}/{stats['total']})")
+    print("  per-class:")
+    for i, name in enumerate(REASONS):
+        row_total = confusion[i].sum().item()
+        row_correct = confusion[i, i].item()
+        acc = row_correct / max(row_total, 1)
+        print(f"    {name:26s} {acc:.3f} ({row_correct}/{row_total})")
+    print("  confusion matrix rows=target cols=pred:")
+    print("    " + " ".join(f"{i:>4d}" for i in range(len(REASONS))))
+    for i, name in enumerate(REASONS):
+        values = " ".join(f"{v.item():>4d}" for v in confusion[i])
+        print(f"    {i} {name:24s} {values}")
+    print("  examples:")
+    for example in stats["examples"]:
+        print(f"    target={example['target']:26s} pred={example['pred']:26s} conf={example['conf']:.2f}")
 
 
 @torch.no_grad()
@@ -255,6 +306,8 @@ def main() -> None:
         model(first[0].to(device), first[1].to(device), trace=True)
     print()
 
+    print_eval_report("训练前 eval:", evaluate_detailed(model, val_loader, device))
+    print()
     show_predictions(model, val_samples, device, title="训练前预测:")
     print()
 
@@ -263,6 +316,8 @@ def main() -> None:
         val_acc = evaluate(model, val_loader, device)
         print(f"epoch {epoch:02d} | train_loss={train_loss:.4f} | val_acc={val_acc:.3f}")
 
+    print()
+    print_eval_report("训练后 eval:", evaluate_detailed(model, val_loader, device))
     print()
     show_predictions(model, val_samples, device, title="训练后预测:")
 

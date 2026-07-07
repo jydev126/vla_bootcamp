@@ -7,5 +7,6 @@
 
 torch>=2.4,<3
 transformers>=4.44,<5
+datasets>=2.20,<4
 pillow>=10,<12
 matplotlib>=3.8,<4
